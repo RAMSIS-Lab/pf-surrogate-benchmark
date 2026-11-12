@@ -61,6 +61,17 @@ Out-of-service branches and generators keep their row with status 0. Bus Vm/Va c
 holds the label Vm of its bus. Bus types come from the dataset (1 PQ, 2 PV, 3 REF, set per scenario).
 Self-check: at the label voltage the power mismatch at non-slack buses is below 1.1e-7 MVA on 100 samples.
 
+### GENCO on PF-Delta case118, task 1.3 (scripts/run_genco_pfdelta.py)
+
+`gridfm/genco-pfdelta` (HF rev 9194a31f), `task_1.3/seed{1,2,3}/last.pt`, evaluated on `gridfm/pfdelta_task1.3`
+(rev c0988a5d) `case118/test`, all six subsets (n, n-1, n-2 x feasible, nose; 2,000 / 200 graphs, none dropped), with
+graphkit branch `genco-paper-repro-pfdelta` (commit 310e2f98, a separate clone put on PYTHONPATH, nothing installed).
+The normalizer is fitted on the train split as the branch does (baseMVA 236.3427, vn_kv_max 345, equal to the authors'
+logged stats). Reproduction check: `results/models/genco_pfdelta_t1.3_seed*/repro_check.csv` compares our PQ-bus Vm and
+Va RMSE with the authors' `test_*_RMSE.csv`; they agree to about 1e-6 relative. Exports: `pfdelta_task1.3:<subset>`
+entries in the manifest (one npz per subset; the `pred_*_seed1` arrays are seed-1 predictions).
+Mean over seeds: `results/models/genco_pfdelta_t1.3_seed_mean.csv`.
+
 ### Not run
 
 `gridfm/gridfm-pf-reconstruction` is not a repository on the Hugging Face Hub (model_info returns not found; the
