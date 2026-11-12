@@ -1,0 +1,5 @@
+grid,condition,method,k,procs,n_samples,samples_per_s,load_avg
+case14,n,dc,,1,500,1255.4,29.05
+case14,n,dc,,16,500,2337.9,29.6
+case14,n,dc_fd,2,1,500,399.1,29.6
+case14,n,dc_fd,2,16,500,1507.5,29.6
