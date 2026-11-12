@@ -14,7 +14,7 @@ from torch_geometric.data import Batch
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--case", required=True); ap.add_argument("--gpu", type=int, default=0); ap.add_argument("--n", type=int, default=2000)
-ap.add_argument("--no-timing", action="store_true")
+ap.add_argument("--no-timing", action="store_true"); ap.add_argument("--timing-only", action="store_true")
 a = ap.parse_args()
 tag = f"genco_datakit_{a.case}_base_seed0"
 res = root / "results/models" / tag; res.mkdir(parents=True, exist_ok=True)
@@ -29,8 +29,10 @@ tabs = G.read_scenarios(raw, ids)
 case = export_scenarios(tabs, ids, 100.0)
 items = G.build_items(args, norm, tabs, ids)
 sid, VM, VA = [], [], []
-for k in range(0, len(items), 64):
+for k in (range(0, len(items), 64) if not a.timing_only else []):
     s, vm, va = G.predict(task, Batch.from_data_list(items[k:k + 64]).to(dev)); sid.append(s); VM.append(vm); VA.append(va)
+if a.timing_only:
+    exec(open(__file__).read().split("# TI" + "MING\n")[1]); sys.exit()
 sid = np.concatenate(sid); VM = np.concatenate(VM); VA = np.concatenate(VA)
 assert list(sid) == ids
 y0 = items[0]["bus"].y
@@ -46,6 +48,8 @@ p = cd / f"{a.case}_{tag}.npz"; np.savez_compressed(p, **case)
 mp = cd / "manifest.json"; m_ = json.load(open(mp)) if mp.exists() else {}
 m_[f"{a.case}:{tag}"] = dict(path=str(p), n_samples=len(ids), baseMVA=100.0, export_selfcheck_max_mismatch_mva=max(chk))
 json.dump(m_, open(mp, "w"), indent=1); print("selfcheck", max(chk), flush=True)
+# TIMING
+
 if not a.no_timing:
     rows, gname = [], torch.cuda.get_device_name(dev)
     def bench(n, device, thr=None):
@@ -53,9 +57,10 @@ if not a.no_timing:
         b = Batch.from_data_list([items[i % len(items)] for i in range(n)]).to(device); task.to(device)
         return time_fn(lambda: G.forward(task, b), device)
     for n in (1, 64, 1024):
-        try: t = bench(n, dev)
-        except torch.cuda.OutOfMemoryError: t = float("nan"); torch.cuda.empty_cache()
-        rows.append(dict(device=gname, threads="", batch=n, sec_per_batch=t, ms_per_sample=1e3 * t / n)); print(rows[-1], flush=True)
+        for m in [n] + [x for x in (512, 256, 128) if x < n]:   # largest batch that fits
+            try: t = bench(m, dev); break
+            except torch.cuda.OutOfMemoryError: t = float("nan"); torch.cuda.empty_cache()
+        rows.append(dict(device=gname, threads="", batch=m, sec_per_batch=t, ms_per_sample=1e3 * t / m)); print(rows[-1], flush=True)
     t = bench(1, torch.device("cpu"), 1)
     rows.append(dict(device="cpu", threads=1, batch=1, sec_per_batch=t, ms_per_sample=1e3 * t))
     pd.DataFrame(rows).to_csv(res / "timing.csv", index=False)

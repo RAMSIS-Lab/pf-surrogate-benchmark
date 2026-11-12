@@ -72,6 +72,15 @@ Va RMSE with the authors' `test_*_RMSE.csv`; they agree to about 1e-6 relative. 
 entries in the manifest (one npz per subset; the `pred_*_seed1` arrays are seed-1 predictions).
 Mean over seeds: `results/models/genco_pfdelta_t1.3_seed_mean.csv`.
 
+### GENCO datakit checkpoints, base size, seed0 (scripts/run_genco_datakit.py)
+
+`gridfm/genco-pf-datakit` (HF rev f5eb20ee) `<case>/base/seed0/best_model_state_dict.pt` with the checkpoint's own yaml and
+`normalizer_stats.pt`, on IEEE 14, 30, 57, 118 and GOC 500, each on the test split of its dataset `gridfm/pf_small_<case>`
+(graphkit's split: yaml seed, test_ratio 0.1 by load-scenario id, reproduced by `pfsb/models/genco_datakit.py`; about 22,000
+test scenarios per grid, a seed-0 subset of 2,000 is scored). Run with the installed graphkit 0.0.7 (branch
+`genco-paper-repro`, commit 95b90eec). Graphs are built only for the scored scenarios with graphkit's own builder,
+normalizer and transforms. Exports: `<case>:genco_datakit_<case>_base_seed0` in the manifest.
+
 ### Not run
 
 `gridfm/gridfm-pf-reconstruction` is not a repository on the Hugging Face Hub (model_info returns not found; the
