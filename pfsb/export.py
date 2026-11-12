@@ -35,7 +35,7 @@ def export_scenarios(raw_tables, scen_ids, base_mva):
         br[k, :, 0] = l.from_bus.values + 1; br[k, :, 1] = l.to_bus.values + 1
         br[k, :, 2] = l.r.values; br[k, :, 3] = l.x.values; br[k, :, 4] = l.b.values
         br[k, :, 5] = l.rate_a.values
-        br[k, :, 8] = l.tap.values; br[k, :, 9] = l.shift.values; br[k, :, 10] = l.br_status.values
+        br[k, :, 8] = l.tap.values; br[k, :, 9] = l["shift"].values; br[k, :, 10] = l.br_status.values
         br[k, :, 11] = l.ang_min.values; br[k, :, 12] = l.ang_max.values
         bo = np.where(l.br_status.values == 0)[0]; go = np.where(g.in_service.values == 0)[0]
         parts = [f"branch_out={int(i)}" for i in bo] + [f"gen_out={int(i)}" for i in go]
@@ -51,7 +51,7 @@ def max_mismatch(case, k):
     from pandapower.pypower.makeSbus import makeSbus
     from pandapower.pypower.idx_bus import BUS_TYPE
     bus = case["bus"][k].copy(); gen = case["gen"][k]; br = case["branch"][k].copy(); bm = float(case["baseMVA"])
-    br[br[:, 10] == 0] = br[br[:, 10] == 0]  # status handled by makeYbus
+    br = np.hstack([br, np.zeros((len(br), 24))])  # pandapower's PYPOWER fork has extra branch columns
     ids = bus[:, 0].astype(int) - 1
     bus_i = bus.copy(); bus_i[:, 0] = np.arange(len(bus)); gen_i = gen.copy(); gen_i[:, 0] -= 1
     br_i = br.copy(); br_i[:, 0] -= 1; br_i[:, 1] -= 1
