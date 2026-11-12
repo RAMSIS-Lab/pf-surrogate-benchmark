@@ -99,7 +99,7 @@ def sample_to_ppc(d: dict) -> dict:
 
 def load_test_set(grid: str, cond: str, cache_dir="cache", roots=None, max_samples: int = 500, seed: int = 0):
     """(ids, [ppc, ...]) for the test subset, cached at cache_dir/{grid}_{cond}.npz (stacked ppc arrays + ids)."""
-    cache = Path(cache_dir) / f"{grid}_{cond}.npz"
+    cache = Path(cache_dir) / f"{grid}_{cond}_m{max_samples}_s{seed}.npz"
     if cache.exists():
         z = np.load(cache)
         return list(z["ids"]), [{"baseMVA": float(z["base"]), "bus": z["bus"][i], "gen": z["gen"][i],
