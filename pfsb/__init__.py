@@ -1,0 +1,5 @@
+"""pf-surrogate-benchmark. Importing this package pins BLAS/OpenMP to one thread (set before numpy loads)."""
+import os
+
+for _v in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS", "NUMEXPR_NUM_THREADS"):
+    os.environ.setdefault(_v, "1")
