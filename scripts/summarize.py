@@ -10,7 +10,8 @@ for d in sorted(p for p in root.iterdir() if p.is_dir()):
         continue
     df = pd.read_csv(f)
     df["kind"] = df.condition.map(lambda c: "base" if c == "base" else ("branch_out" if "branch_out" in c else "gen_out"))
-    for name, g in [("all", df)] + [(k, g) for k, g in df.groupby("kind")]:
+    by = "dataset" if df.dataset.nunique() > 1 else "kind"   # PF-Delta runs hold several test subsets per model
+    for name, g in [("all", df)] + [(k, g) for k, g in df.groupby(by)]:
         r = dict(model=d.name, dataset=df.dataset.iloc[0], subset=name, n=len(g),
                  vm_mae=g.vm_mae.mean(), va_mae_deg=g.va_mae_deg.mean(), vm_max=g.vm_max.max(), va_max_deg=g.va_max_deg.max(),
                  vm_mae_pq=g.vm_mae_pq.mean(), va_mae_deg_pq=g.va_mae_deg_pq.mean(),

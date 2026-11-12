@@ -65,3 +65,9 @@ Self-check: at the label voltage the power mismatch at non-slack buses is below 
 
 `gridfm/gridfm-pf-reconstruction` is not a repository on the Hugging Face Hub (model_info returns not found; the
 gridfm org lists only six genco-* repos), so that model was not evaluated.
+
+## Classical results
+`results/classical/per_sample.csv`, `summary.csv` (PF-Delta task 1.3 test subsets, 500 per grid and condition; ids in
+`test_ids_*.txt`), `manifest/` + `summary_manifest.csv` (exported scenarios, `scripts/run_classical_manifest.py`
+scores every manifest entry not yet scored), `throughput.csv` (samples/s, P = 1 and 16; measured on a loaded shared
+node, load average about 25 to 35 on 24 cores, so treat as a lower bound).
