@@ -120,6 +120,11 @@ def predict(net, ds, idx, device, bs=64):
 # ---------------------------------------------------------------------------------------------------------------
 # Export of the scored samples as PYPOWER cases
 # ---------------------------------------------------------------------------------------------------------------
+def pv_mask(X):
+    """PV buses: typed 1 in the file, or (case6470rte types every bus 2) carrying a varying Vm setpoint in the input."""
+    return (X[0, :, 1] == 1) | (X[:, :, 2].std(0) > 1e-9)
+
+
 def raw_samples(case, gids):
     """Raw (x, y, edge) rows of the shared v2 files for global sample ids (numpy, allow_pickle off)."""
     out = []
@@ -178,7 +183,7 @@ def export_cases(case, gids, base_mva=100.0):
                      b = 0. Rows whose base x differs from x_edge (a base-case conversion artefact, 4 rows in case118)
                      get tap 1 and r re-estimated by least squares from the labelled power balance of 8 samples
                      (the fit reaches 1e-10 MVA there);
-      buses        : Pd, Qd = x[:, 4:6] * baseMVA; type from the file (1 = PV, 2 = PQ; the slack bus is the one whose
+      buses        : Pd, Qd = x[:, 4:6] * baseMVA (PQ buses where it disagrees with the label net consumption, 6470rte's static generators: the label value); type from the file (1 = PV, 2 = PQ; the slack bus is the one whose
                      label angle is constant over samples and is typed 2 like the PQ buses in the file);
       shunts       : base-case bus shunts (GS, BS) are included iff that lowers the label power mismatch;
       generators   : one per PV bus plus the slack; PG, QG = Pd, Qd minus the label net consumption y[:, 4:6], corrected
@@ -199,7 +204,8 @@ def export_cases(case, gids, base_mva=100.0):
     assert len(slack) == 1, f"slack bus not unique: {slack}"
     slack = int(slack[0])
     assert slack == int(net.ext_grid.bus.values[0]), "slack differs from the base case's ext_grid bus"
-    btype = np.where(ftype[0] == 1, 2, 1); btype[slack] = 3
+    pvm = pv_mask(X)
+    btype = np.where(pvm, 2, 1); btype[slack] = 3
     gbus = np.where(btype >= 2)[0]
     ng = len(gbus)
     sh = ppc["bus"][:, 4:6]
@@ -213,9 +219,13 @@ def export_cases(case, gids, base_mva=100.0):
     br[:, :, 0:2] = E[:, :, 0:2]
     br[:, :nl, 2] = E[:, :nl, 2]; br[:, :nl, 3] = E[:, :nl, 3]
     br[:, nl:, 2] = br0[nl:, 2]; br[:, nl:, 8] = br0[nl:, 8]; br[:, nl:, 9] = br0[nl:, 9]
-    xt = E[0, nl:, 2] / 990.0
-    br[:, nl:, 3] = xt[None]
-    bad = np.where(np.abs(br0[nl:, 3] - xt) > 1e-7)[0] + nl
+    if np.median(np.abs(br0[nl:, 3] - E[0, nl:, 2] / 990.0) / br0[nl:, 3]) < 0.05:   # case14, case118: transformer x is stored as r / 990
+        xt = E[0, nl:, 2] / 990.0
+        br[:, nl:, 3] = xt[None]
+        bad = np.where(np.abs(br0[nl:, 3] - xt) > 1e-7)[0] + nl
+    else:                               # case6470rte: the edge file's transformer columns are not usable; base rows
+        br[:, nl:, 3] = br0[nl:, 3][None]
+        bad = np.array([], dtype=int)
     br[:, :, 10] = 1; br[:, :, 11] = -360; br[:, :, 12] = 360
     case_d = dict(bus=bus, gen=gen, branch=br, label_vm=Y[:, :, 2].copy(), label_va_deg=Y[:, :, 3].copy(),
                   baseMVA=np.array(base_mva), sample_ids=np.asarray(gids), condition=np.array(["base"] * S))
@@ -228,9 +238,16 @@ def export_cases(case, gids, base_mva=100.0):
     def set_gen(use_shunt):
         bus[:, :, 4:6] = sh[None] if use_shunt else 0.0
         vm2 = case_d["label_vm"] ** 2
+        bus[:, :, 2] = X[:, :, 4] * base_mva; bus[:, :, 3] = X[:, :, 5] * base_mva
         pg = (X[:, :, 4] - Y[:, :, 4]) * base_mva + bus[:, :, 4] * vm2
         qg = (X[:, :, 5] - Y[:, :, 5]) * base_mva - bus[:, :, 5] * vm2
         gen[:, :, 1] = pg[:, gbus]; gen[:, :, 2] = qg[:, gbus]
+        # PQ buses: the label net consumption is the specified injection (case6470rte has static generators there,
+        # i.e. negative loads that the input features do not carry)
+        pq = btype == 1
+        pdy = Y[:, :, 4] * base_mva - sh[None, :, 0] * vm2; qdy = Y[:, :, 5] * base_mva + sh[None, :, 1] * vm2   # base shunts assumed in the label
+        diff = pq[None] & ((np.abs(pdy - bus[:, :, 2]) > 1e-4) | (np.abs(qdy - bus[:, :, 3]) > 1e-4))
+        bus[:, :, 2] = np.where(diff, pdy, bus[:, :, 2]); bus[:, :, 3] = np.where(diff, qdy, bus[:, :, 3])
     m = {}
     for use in ((False, True) if np.abs(sh).max() > 0 else (False,)):
         set_gen(use); m[use] = sum(max_mismatch(case_d, k) for k in range(min(3, S)))

@@ -37,11 +37,13 @@ loc = np.sort(rng.choice(len(ds), a.n, replace=False)) if len(ds) > a.n else np.
 gids = (offset + loc).astype(int)
 print(f"{a.case}: file {n_file}, test split {len(ds)} (file rows {offset}..{n_file - 1}), scored {len(loc)}; ckpt {ckpt}", flush=True)
 
+PV = P.pv_mask(P.raw_samples(a.case, gids)[0])
+
 def score(net, tag):
     torch.manual_seed(0)
     p = P.predict(net, ds, loc, dev)
     sd = p["va_true"].std(0); s = int(np.argmin(sd)); assert sd[s] < 1e-3 and np.sort(sd)[1] > 1e-2   # slack: constant label angle
-    bt = np.where(p["ftype"] == 1, 2, 1); bt[:, s] = 3
+    bt = np.where(PV[None], 2, 1) * np.ones((len(loc), 1), int); bt[:, s] = 3
     err = sample_errors(p["vm"], p["va"], p["vm_true"], p["va_true"], np.full(len(loc), s), bt)
     d = root / "results/models" / tag; d.mkdir(parents=True, exist_ok=True)
     pd.DataFrame({"dataset": dataset, "sample_id": gids, "condition": "base", **err}).to_csv(d / "per_sample.csv", index=False)
