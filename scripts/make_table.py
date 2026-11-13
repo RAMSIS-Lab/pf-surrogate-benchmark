@@ -84,6 +84,7 @@ def main():
         t = {mk: tov.get(mk, st[mk][2]) for mk in st}
         rows.append(dict(data=data, model=model, vm=vm, va=va, gpu_b1=tb1, gpu_bmax=tbig,
                          **{f"va_{m}{k or ''}": st[(m, k)][0] for (m, k) in st},
+                         **{f"vm_{m}{k or ''}": st[(m, k)][1] for (m, k) in st},
                          **{f"t_{m}{k or ''}": t[(m, k)] for (m, k) in st},
                          nr_cold_conv=st.get(("nr_cold", None), (0, 0, 0, np.nan))[3]))
 
@@ -108,7 +109,7 @@ def main():
     gpu = tm[tm.device != "cpu"]
     tb1 = float(gpu.ms_per_sample[gpu.batch == 1].iloc[0]); tbig = float(gpu.ms_per_sample[gpu.batch == gpu.batch.max()].iloc[0])
     for sub, lab in [("case118_n_feasible", "N"), ("case118_n-1_feasible", "N-1"), ("case118_n-2_feasible", "N-2"),
-                     ("case118_n_nose", "N near nose"), ("case118_n-1_nose", "N-1 near nose"), ("case118_n-2_nose", "N-2 near nose")]:
+                     ("case118_n_nose", "N near collapse"), ("case118_n-1_nose", "N-1 near collapse"), ("case118_n-2_nose", "N-2 near collapse")]:
         f = R / "classical" / "manifest" / f"per_sample_pfdelta_task1.3_{sub}.csv"
         r = sm[sm.subset == sub]
         if r.empty or not f.exists():
@@ -154,7 +155,8 @@ def main():
         lines.append(" & ".join([shown, data, fmt(r.vm, "vm"), fmt(r.va, "va"),
                                  f"{fmt(r.gpu_b1, 't')} / {fmt(r.gpu_bmax, 't')}",
                                  fmt(r.va_dc, "va"), fmt(r.va_dc_fd1, "va"), fmt(r.va_dc_fd2, "va"), fmt(r.va_dc_fd5, "va"),
-                                 fmt(r.t_dc_fd2, "t"), fmt(r.t_dc_fd5, "t"),
+                                 fmt(r.vm_dc, "vm"), fmt(r.vm_dc_fd1, "vm"), fmt(r.vm_dc_fd2, "vm"), fmt(r.vm_dc_fd5, "vm"),
+                                 fmt(r.t_dc_fd2, "t"),
                                  fmt(r.t_nr_cold, "t") if not (r.nr_cold_conv < 0.5) else "div."]) + r" \\")
     pathlib.Path(a.out_tex).write_text("\n".join(lines) + "\n")
     print(df[["data", "model", "va", "va_dc", "va_dc_fd1", "va_dc_fd2", "va_dc_fd5", "t_dc_fd2", "t_nr_cold"]].to_string())

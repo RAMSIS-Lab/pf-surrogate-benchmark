@@ -71,6 +71,8 @@ def main():
         ax.set_title(a.titles[i] if a.titles else row, fontsize=8)
         ax.set_xlabel("time per sample (ms)")
         ax.grid(True, which="major", lw=0.3, color="0.85")
+    lo, hi = axes[0][0].get_ylim()
+    axes[0][0].set_ylim(lo, hi * 4)  # headroom so the ladder labels (e.g. "DC") stay inside every panel
     axes[0][0].set_ylabel("angle MAE (deg)")
     h, l = axes[0][0].get_legend_handles_labels()
     fig.legend(h, l, loc="lower center", ncol=3, frameon=False, bbox_to_anchor=(0.5, -0.03))
