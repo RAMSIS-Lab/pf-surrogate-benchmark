@@ -84,7 +84,8 @@ def main():
         t = {mk: tov.get(mk, st[mk][2]) for mk in st}
         rows.append(dict(data=data, model=model, vm=vm, va=va, gpu_b1=tb1, gpu_bmax=tbig,
                          **{f"va_{m}{k or ''}": st[(m, k)][0] for (m, k) in st},
-                         **{f"t_{m}{k or ''}": t[(m, k)] for (m, k) in st}))
+                         **{f"t_{m}{k or ''}": t[(m, k)] for (m, k) in st},
+                         nr_cold_conv=st.get(("nr_cold", None), (0, 0, 0, np.nan))[3]))
 
     # GENCO datakit grids
     for case, lab in [("case14_ieee", "IEEE 14"), ("case30_ieee", "IEEE 30"), ("case57_ieee", "IEEE 57"),
@@ -136,7 +137,8 @@ def main():
                     tb1 = float(gpu.ms_per_sample[gpu.batch == gpu.batch.min()].iloc[0])
                     tbig = float(gpu.ms_per_sample[gpu.batch == gpu.batch.max()].iloc[0])
             grid = "case" + "".join(ch for ch in name[len(prefix):].split("_")[0] if ch.isdigit())
-            add(f"{label} authors' IEEE {grid[4:]}" + ("" if name[len(prefix):].split("_")[0].isdigit() else f" ({name[len(prefix):]})"), label, g.vm_mae, g.va_mae_deg, tb1, tbig, pd.read_csv(files[0]), grid)
+            sys_name = "RTE" if "rte" in name else "IEEE"
+            add(f"{label} authors' {sys_name} {grid[4:]}", label, g.vm_mae, g.va_mae_deg, tb1, tbig, pd.read_csv(files[0]), grid)
 
     df = pd.DataFrame(rows)
     df.to_csv(a.out_csv, index=False)
@@ -152,7 +154,8 @@ def main():
         lines.append(" & ".join([shown, data, fmt(r.vm, "vm"), fmt(r.va, "va"),
                                  f"{fmt(r.gpu_b1, 't')} / {fmt(r.gpu_bmax, 't')}",
                                  fmt(r.va_dc, "va"), fmt(r.va_dc_fd1, "va"), fmt(r.va_dc_fd2, "va"), fmt(r.va_dc_fd5, "va"),
-                                 fmt(r.t_dc_fd2, "t"), fmt(r.t_dc_fd5, "t"), fmt(r.t_nr_cold, "t")]) + r" \\")
+                                 fmt(r.t_dc_fd2, "t"), fmt(r.t_dc_fd5, "t"),
+                                 fmt(r.t_nr_cold, "t") if not (r.nr_cold_conv < 0.5) else "div."]) + r" \\")
     pathlib.Path(a.out_tex).write_text("\n".join(lines) + "\n")
     print(df[["data", "model", "va", "va_dc", "va_dc_fd1", "va_dc_fd2", "va_dc_fd5", "t_dc_fd2", "t_nr_cold"]].to_string())
 
