@@ -9,7 +9,7 @@ for d in sorted(p for p in root.iterdir() if p.is_dir()):
     if not f.exists():
         continue
     df = pd.read_csv(f)
-    df["kind"] = df.condition.map(lambda c: "base" if c == "base" else ("branch_out" if "branch_out" in c else "gen_out"))
+    df["kind"] = df.condition.map(lambda c: c if c in ("n", "n-1", "n-2") else "base" if c == "base" else ("branch_out" if "branch_out" in c else "gen_out"))
     by = "dataset" if df.dataset.nunique() > 1 else "kind"   # PF-Delta runs hold several test subsets per model
     for name, g in [("all", df)] + [(k, g) for k, g in df.groupby(by)]:
         r = dict(model=d.name, dataset=df.dataset.iloc[0], subset=name, n=len(g),

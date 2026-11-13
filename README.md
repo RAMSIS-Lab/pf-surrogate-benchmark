@@ -81,6 +81,26 @@ test scenarios per grid, a seed-0 subset of 2,000 is scored). Run with the insta
 `genco-paper-repro`, commit 95b90eec). Graphs are built only for the scored scenarios with graphkit's own builder,
 normalizer and transforms. Exports: `<case>:genco_datakit_<case>_base_seed0` in the manifest.
 
+### PF-Delta recipe models: PowerFlowNet, GNS, CANOS-PF (scripts/run_pfdelta_models.py)
+
+Trained with PF-Delta's own code and task-1.3 recipe (pinned upstream clone, commit 6fcdf2b; configs in `scripts/train_upstream`). `pfsb/models/pfdelta_models.py` rebuilds a model from a run directory (`config.yaml` + `model.pt`)
+through upstream's registry and returns Vm (pu) and Va (deg) per bus. Notes: GNS fixes angles only up to a global rotation, so
+prediction and label angles are both referenced to the slack bus (as for every model here); `per_sample_diag_bestrot.csv`
+adds the angle MAE after removing the best constant rotation per sample (diagnostic only). CANOS reads its bus output;
+PowerFlowNet's normalized output is de-normalized with the training statistics and the known inputs (PV Vm, slack Vm and Va)
+are taken from the sample. Vm at PV buses and Vm and Va at the slack bus are given inputs, so they count as zero error.
+
+    python scripts/run_pfdelta_models.py --model {pfnet,gns,canos} --grid case118 --run-dir <run dir> [--root <data root>]
+    bash scripts/eval_when_done.sh          # evaluates every finished, not yet evaluated run under cache/pfdelta-upstream/runs/pfsb_local
+    python scripts/check_pfdelta_pbl.py --model gns --run-dir <run dir>   # PF-Delta's own PBL Mean on the test set
+
+Test samples are the ids in `results/classical/test_ids_<grid>_<cond>.txt`. Each id is mapped to its row in PF-Delta's
+processed `test.pt` (feasible n, n-1, n-2 blocks of 2000 in shuffle order) and the labels at the mapped rows are checked against
+the raw sample JSON and the cached classical npz before scoring (`id_mapping_check.json`); a mismatch aborts the run.
+Timing: forward pass only, batches on device, median of 3 after warm-up, GPU batch 1, 64, 1024 and CPU 1 thread batch 1; the
+GPUs and CPUs are shared with training jobs, so treat as an upper bound. Rows `*_aug` are the August 2026 case118 GNS and
+CANOS runs (same recipe, trained on OSC). Tests: `pytest tests/test_pfdelta_models.py`.
+
 ### Not run
 
 `gridfm/gridfm-pf-reconstruction` is not a repository on the Hugging Face Hub (model_info returns not found; the

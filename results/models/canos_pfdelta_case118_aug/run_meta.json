@@ -1,0 +1,14 @@
+{
+ "model": "canos",
+ "grid": "case118",
+ "run_dir": "/research/nfs_shafieezadeh_1/mahrouqi.1/repos/pf-surrogate-benchmark/cache/august_case118/canos",
+ "host": "ceg-cnc196872d.coeit.osu.edu",
+ "torch": "2.6.0+cu124",
+ "load_avg": [
+  38.13,
+  37.24,
+  37.02
+ ],
+ "timing_note": "GPUs shared with running training jobs; forward pass only, batches on device",
+ "time": "2026-11-12 19:03:10"
+}

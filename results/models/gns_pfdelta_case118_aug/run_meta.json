@@ -1,0 +1,14 @@
+{
+ "model": "gns",
+ "grid": "case118",
+ "run_dir": "/research/nfs_shafieezadeh_1/mahrouqi.1/repos/pf-surrogate-benchmark/cache/august_case118/gns",
+ "host": "ceg-cnc196872d.coeit.osu.edu",
+ "torch": "2.6.0+cu124",
+ "load_avg": [
+  36.89,
+  37.16,
+  36.99
+ ],
+ "timing_note": "GPUs shared with running training jobs; forward pass only, batches on device",
+ "time": "2026-11-12 19:01:33"
+}
