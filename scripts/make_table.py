@@ -115,11 +115,41 @@ def main():
         r = r.iloc[0]
         add(f"PF-Delta 118 {lab}", "GENCO (3 seeds)", r.vm_mae_mean, r.va_mae_deg_mean, tb1, tbig, pd.read_csv(f), "case118", f.name)
 
+    # Other released-weight models (PowerFlowNet authors' weights, SafePowerGraph): any summary row whose model starts
+    # with a known prefix, paired with the classical manifest file that names the same model.
+    for prefix, label in [("pfn_original_", "PowerFlowNet"), ("spg_", "SafePowerGraph")]:
+        for name in sorted(set(msum.model[msum.model.str.startswith(prefix)]), key=lambda x: int("".join(c for c in x[len(prefix):].split("_")[0] if c.isdigit()) or 0)):
+            if any(t in name for t in ("nodrop", "large")):
+                continue
+            g = msum[(msum.model == name) & (msum.subset == "all")]
+            if g.empty:
+                g = msum[msum.model == name].head(1)
+            files = sorted((R / "classical" / "manifest").glob(f"per_sample_*{name}*.csv"))
+            if g.empty or not files:
+                continue
+            g = g.iloc[0]
+            tmf = R / "models" / name / "timing.csv"
+            tb1, tbig = g.get("gpu_b1_ms_per_sample", np.nan), np.nan
+            if tmf.exists():
+                tm = pd.read_csv(tmf); gpu = tm[tm.device != "cpu"]
+                if not gpu.empty:
+                    tb1 = float(gpu.ms_per_sample[gpu.batch == gpu.batch.min()].iloc[0])
+                    tbig = float(gpu.ms_per_sample[gpu.batch == gpu.batch.max()].iloc[0])
+            grid = "case" + "".join(ch for ch in name[len(prefix):].split("_")[0] if ch.isdigit())
+            add(f"{label} authors' IEEE {grid[4:]}" + ("" if name[len(prefix):].split("_")[0].isdigit() else f" ({name[len(prefix):]})"), label, g.vm_mae, g.va_mae_deg, tb1, tbig, pd.read_csv(files[0]), grid)
+
     df = pd.DataFrame(rows)
     df.to_csv(a.out_csv, index=False)
     lines = []
+    prev = None
     for r in df.itertuples():
-        lines.append(" & ".join([r.data, fmt(r.vm, "vm"), fmt(r.va, "va"),
+        mname = r.model.replace(" (3 seeds)", "")
+        if prev is not None and mname != prev:
+            lines.append(r"\midrule")
+        shown = mname if mname != prev else ""
+        prev = mname
+        data = r.data.replace("PowerFlowNet ", "").replace("SafePowerGraph ", "")
+        lines.append(" & ".join([shown, data, fmt(r.vm, "vm"), fmt(r.va, "va"),
                                  f"{fmt(r.gpu_b1, 't')} / {fmt(r.gpu_bmax, 't')}",
                                  fmt(r.va_dc, "va"), fmt(r.va_dc_fd1, "va"), fmt(r.va_dc_fd2, "va"), fmt(r.va_dc_fd5, "va"),
                                  fmt(r.t_dc_fd2, "t"), fmt(r.t_dc_fd5, "t"), fmt(r.t_nr_cold, "t")]) + r" \\")
