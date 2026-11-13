@@ -29,9 +29,16 @@ def cl_stats(ps):
     return out
 
 
-def timing_override(root, grid_key):
-    """Median per-sample time per method from a quiet-node run, by grid key (PF-Delta grid or manifest dataset)."""
+def timing_override(root, grid_key, fname=None):
+    """Median per-sample time per method from a quiet-node run: the same sample file if given, else by grid key."""
     out = {}
+    if fname is not None and (root / "manifest" / fname).exists():
+        d = pd.read_csv(root / "manifest" / fname)
+        for m, k in METH:
+            e = d[(d.method == m) & ((d.k == k) if k is not None else d.k.isna())]
+            if not e.empty:
+                out[(m, k)] = float(np.median(e.t_build_ms + e.t_solve_ms))
+        return out
     for f in [root / "per_sample.csv"] + sorted((root / "manifest").glob("per_sample_*.csv")) if root.exists() else []:
         if not f.exists():
             continue
@@ -51,11 +58,13 @@ def fmt(x, kind):
     if x is None or (isinstance(x, float) and np.isnan(x)):
         return r"\PH{--}"
     if kind == "va":
-        return f"{x:.2g}" if x >= 0.01 else f"{x:.1e}".replace("e-0", "e-")
+        if x >= 10:
+            return f"{x:.0f}"
+        return f"{x:#.2g}".rstrip(".") if x >= 0.01 else f"{x:.1e}".replace("e-0", "e-")
     if kind == "vm":
         return f"{x:.1e}".replace("e-0", "e-")
     if kind == "t":
-        return f"{x:.2g}" if x < 10 else f"{x:.0f}"
+        return f"{x:#.2g}".rstrip(".") if x < 10 else f"{x:.0f}"
     return str(x)
 
 
@@ -69,9 +78,9 @@ def main():
     msum = pd.read_csv(R / "models" / "summary.csv")
     rows = []
 
-    def add(data, model, vm, va, tb1, tbig, ps, tkey):
+    def add(data, model, vm, va, tb1, tbig, ps, tkey, fname=None):
         st = cl_stats(ps)
-        tov = timing_override(troot, tkey) if troot != R / "classical" else {}
+        tov = timing_override(troot, tkey, fname) if troot != R / "classical" else {}
         t = {mk: tov.get(mk, st[mk][2]) for mk in st}
         rows.append(dict(data=data, model=model, vm=vm, va=va, gpu_b1=tb1, gpu_bmax=tbig,
                          **{f"va_{m}{k or ''}": st[(m, k)][0] for (m, k) in st},
@@ -90,7 +99,7 @@ def main():
         tm = pd.read_csv(R / "models" / name / "timing.csv")
         gpu = tm[tm.device != "cpu"]
         big = float(gpu.ms_per_sample[gpu.batch == gpu.batch.max()].iloc[0])
-        add(f"datakit {lab}", "GENCO", g.vm_mae, g.va_mae_deg, g.gpu_b1_ms_per_sample, big, pd.read_csv(f), case)
+        add(f"datakit {lab}", "GENCO", g.vm_mae, g.va_mae_deg, g.gpu_b1_ms_per_sample, big, pd.read_csv(f), case.split("_")[0])
 
     # GENCO PF-Delta 118, seed mean per subset
     sm = pd.read_csv(R / "models" / "genco_pfdelta_t1.3_seed_mean.csv")
@@ -104,23 +113,13 @@ def main():
         if r.empty or not f.exists():
             continue
         r = r.iloc[0]
-        add(f"PF-Delta 118 {lab}", "GENCO (3 seeds)", r.vm_mae_mean, r.va_mae_deg_mean, tb1, tbig, pd.read_csv(f), "case118")
-
-    # PF-Delta retrained models (N condition), classical from the 500-sample PF-Delta run
-    cps = pd.read_csv(R / "classical" / "per_sample.csv")
-    for grid in ["case14", "case30", "case57", "case118"]:
-        for model in ["PowerFlowNet", "GNS", "CANOS-PF"]:
-            key = {"PowerFlowNet": "pfnet", "GNS": "gns", "CANOS-PF": "canos"}[model]
-            g = msum[(msum.model == f"{key}_pfdelta_{grid}") & (msum.subset == "n")] if "model" in msum else pd.DataFrame()
-            vm, va, tb1, tbig = (g.iloc[0].vm_mae, g.iloc[0].va_mae_deg, g.iloc[0].gpu_b1_ms_per_sample,
-                                 g.iloc[0].gpu_b1024_ms_per_sample) if not g.empty else (np.nan,) * 4
-            add(f"PF-Delta {grid[4:]} N", model, vm, va, tb1, tbig, cps[(cps.grid == grid) & (cps.condition == "n")], grid)
+        add(f"PF-Delta 118 {lab}", "GENCO (3 seeds)", r.vm_mae_mean, r.va_mae_deg_mean, tb1, tbig, pd.read_csv(f), "case118", f.name)
 
     df = pd.DataFrame(rows)
     df.to_csv(a.out_csv, index=False)
     lines = []
     for r in df.itertuples():
-        lines.append(" & ".join([r.data, r.model, fmt(r.vm, "vm"), fmt(r.va, "va"),
+        lines.append(" & ".join([r.data, fmt(r.vm, "vm"), fmt(r.va, "va"),
                                  f"{fmt(r.gpu_b1, 't')} / {fmt(r.gpu_bmax, 't')}",
                                  fmt(r.va_dc, "va"), fmt(r.va_dc_fd1, "va"), fmt(r.va_dc_fd2, "va"), fmt(r.va_dc_fd5, "va"),
                                  fmt(r.t_dc_fd2, "t"), fmt(r.t_dc_fd5, "t"), fmt(r.t_nr_cold, "t")]) + r" \\")
@@ -128,5 +127,42 @@ def main():
     print(df[["data", "model", "va", "va_dc", "va_dc_fd1", "va_dc_fd2", "va_dc_fd5", "t_dc_fd2", "t_nr_cold"]].to_string())
 
 
-if __name__ == "__main__":
+if __name__ == "__main__" and "--retrained" not in __import__("sys").argv:
     main()
+
+
+def retrained_table(out_tex, out_csv):
+    """Table of angle MAE on PF-Delta (500 test samples per grid and condition): classical ladder and the three
+    recipe-trained models. A model cell is a placeholder until results/models/<model>_pfdelta_<grid> exists.
+    Rows tagged with an 'aug' run (case118 checkpoints trained 2026-08 with the same recipe) are printed in red."""
+    c = pd.read_csv(R / "classical" / "summary.csv")
+    m = pd.read_csv(R / "models" / "summary.csv")
+    rows, lines = [], []
+    for grid in ["case14", "case30", "case57", "case118"]:
+        for cond, lab in [("n", "N"), ("n-1", "N-1"), ("n-2", "N-2")]:
+            d = c[(c.grid == grid) & (c.condition == cond)]
+            def cv(meth, k=None):
+                e = d[(d.method == meth) & ((d.k == k) if k is not None else d.k.isna())]
+                return float(e.va_mae_deg_mean.iloc[0]) if not e.empty else np.nan
+            r = dict(grid=grid, cond=lab, dc=cv("dc"), fd1=cv("dc_fd", 1), fd2=cv("dc_fd", 2), fd5=cv("dc_fd", 5))
+            cells = []
+            for key in ["pfnet", "gns", "canos"]:
+                g = m[(m.model == f"{key}_pfdelta_{grid}") & (m.subset == cond)]
+                prov = False
+                if g.empty:
+                    g = m[(m.model == f"{key}_pfdelta_{grid}_aug") & (m.subset == cond)]
+                    prov = not g.empty
+                v = float(g.va_mae_deg.iloc[0]) if not g.empty else np.nan
+                r[key] = v
+                s = fmt(v, "va")
+                cells.append(r"\PH{" + s + "}" if prov and "PH" not in s else s)
+            rows.append(r)
+            lines.append(" & ".join([grid[4:] if cond == "n" else "", lab, fmt(r["dc"], "va"), fmt(r["fd1"], "va"),
+                                     fmt(r["fd2"], "va"), fmt(r["fd5"], "va")] + cells) + r" \\")
+        lines.append(r"\midrule" if grid != "case118" else "")
+    pathlib.Path(out_tex).write_text("\n".join(lines) + "\n")
+    pd.DataFrame(rows).to_csv(out_csv, index=False)
+
+
+if __name__ == "__main__" and "--retrained" in __import__("sys").argv:
+    retrained_table(str(R / "table_retrained.tex"), str(R / "table_retrained.csv"))
