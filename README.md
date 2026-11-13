@@ -101,6 +101,26 @@ Timing: forward pass only, batches on device, median of 3 after warm-up, GPU bat
 GPUs and CPUs are shared with training jobs, so treat as an upper bound. Rows `*_aug` are the August 2026 case118 GNS and
 CANOS runs (same recipe, trained on OSC). Tests: `pytest tests/test_pfdelta_models.py`.
 
+### Original PowerFlowNet release (scripts/run_pfn_original.py)
+
+The authors' released checkpoints (SURFdrive iunfVTGsABT5NaD) on their released v2 data (SURFdrive Qw4RHLvI2RPBIBL), cases 14, 118, 6470rte.
+Upstream `StavrosOrf/PoweFlowNet` is a pinned dependency, not vendored: `git archive f31a4b7` (2023-06-28, the revision that matches the
+June 2023 checkpoints; repo HEAD is 1ebf73b, whose data format and model input differ) into `cache/pfn_original/code_f31a4b7`
+(`PFSB_PFN_CODE`). `pfsb/models/pfn_original.py` uses their `PowerFlowData` (features, per-split normalisation), `MaskEmbdMultiMPN`,
+`Masked_L2_loss`, `evaluate_epoch`. Test split = last 30 % of each file (their `[.5, .2, .3]`); 2,000-sample seed-0 subset, ids in `run_meta.json`.
+Checkpoints (MaskEmbdMultiMPN, mse_loss; best val loss in `save_logs.json` among runs of that case): 14 -> `model_20230627-576` (val 0.0026);
+118 -> `model_20230627-9288` (standard config, val 0.0220, the paper's Table I value; the large-config run `model_20230628-6515`, val 0.0029,
+is reported as `pfn_original_118_large`); 6470rte -> `model_20230627-1251` (val 0.2904; paper 0.303).
+Deviations forced by upstream at that commit: (1) its processed-file name ignores the split, so we subclass to keep splits apart;
+(2) its `forward` creates `nn.Dropout(0.2)` on the fly, so dropout is ACTIVE at eval (fixed upstream in 2024). The primary rows
+`pfn_original_<case>` are the authors' evaluation as written (dropout on, torch seed 0, which reproduces their val loss); `*_nodrop` is the same
+weights with dropout off. Inputs the authors' mask marks as known (PV Vm, slack Va when it is 0) are taken from the sample (zero error); the slack
+Vm is NOT an input in these files, the model predicts it. Normalisation statistics are those of the evaluated split (as upstream does).
+`repro_check.csv` holds their masked L2 on the full val and test splits against `save_logs.json`.
+Export: line r, x per sample come from the edge file; transformer x = edge r column / 990, other transformer data, shunts and the generator list
+from the pandapower base case; 4 case118 transformer-like rows (conversion artefact) get r re-estimated from the labels. See `export_cases`
+docstring and `export_meta.json` (max power mismatch at the label over 100 samples, MVA). The classical solvers are given the slack Vm.
+
 ### Not run
 
 `gridfm/gridfm-pf-reconstruction` is not a repository on the Hugging Face Hub (model_info returns not found; the

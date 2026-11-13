@@ -1,0 +1,1 @@
+{"info": {"slack_bus": 1, "n_gen": 5, "n_lines": 15, "n_trafos": 5, "recalibrated_rows": [], "shunt_used": true, "mismatch_noshunt_3samples": 56.13379198520197}, "selfcheck_samples": 100, "selfcheck_max_mismatch_mva": 8.702096921669365e-07, "selfcheck_median_mva": 9.646354162589532e-10}
